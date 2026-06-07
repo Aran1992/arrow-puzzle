@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arrow Puzzle Prototype</title>
+  <script>p5.disableFriendlyErrors = true;</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.3/p5.min.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; overflow: hidden; background: #0a0e1a; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<script>
+// ============================================================
+//  LEVEL_DATA
+// ============================================================
+const LEVEL_DATA = {
+  cols: 7,
+  rows: 8,
+  lines: []
+};
+
+// ============================================================
+//  配色
+// ============================================================
+const PALETTE = {
+  bg:       '#0b1120',
+  gridLine: '#1a2340',
+  gridDot:  '#2a3555',
+  lineColors: [
+    '#4fc3f7', '#81c784', '#ffb74d', '#f06292',
+    '#ba68c8', '#4dd0e1', '#fff176', '#a1887f',
+    '#ef5350', '#7986cb',
+  ],
+  arrow:     '#ffffff',
+  arrowFill: '#ffd54f',
+  flashColor: '#ff3333',
+  overlapCell: 'rgba(255, 80, 80, 0.35)',
+  overlapBorder: '#ff5252',
+};
+
+// ============================================================
+//  游戏状态
+// ============================================================
+let cellSize, gridOriginX, gridOriginY;
+let gameLines = [];
+let overlaps = [];
+let solvable = null; // null=未检查, true=有解, false=无解
+
+let animState = null;
+const STEP_INTERVAL = 80;
+const FLASH_DURATION = 500;
+
+function setup() {
+  createCanvas(windowWidth, windowHeight);
+  pixelDensity(1);
+  if (LEVEL_DATA.lines.length === 0) generateLevel();
+  calculateLayout();
+  initGameLines();
+  solvable = checkSolvable();
+}
+
+function draw() {
+  background(PALETTE.bg);
+  updateAnim();
+  drawGrid();
+  drawOverlapCells();
+  drawGameLines();
+  drawArrowHeads();
+  drawHUD();
+}
+
+// ============================================================
+//  初始化游戏线段
+// ============================================================
+function initGameLines() {
+  gameLines = LEVEL_DATA.lines.map((ld, idx) => {
+    const cells = expandCells(ld.points);
+    const [c0, r0] = ld.points[0];
+    const [c1, r1] = ld.points[1];
+    const dir = { dc: Math.sign(c0 - c1), dr: Math.sign(r0 - r1) };
+    return {
+      id: ld.id,
+      cells: cells,
+      dir: dir,
+      color: PALETTE.lineColors[idx % PALETTE.lineColors.length],
+      flashAlpha: 0,
+      alive: true,
+    };
+  });
+}
+
+// ============================================================
+//  点击检测
+// ============================================================
+function mousePressed() {
+  if (animState) return;
+
+  const col = Math.floor((mouseX - gridOriginX) / cellSize);
+  const row = Math.floor((mouseY - gridOriginY) / cellSize);
+
+  for (let i = gameLines.length - 1; i >= 0; i--) {
+    const g = gameLines[i];
+    if (!g.alive) continue;
+    for (const [c, r] of g.cells) {
+      if (c === col && r === row) {
+        startMove(g);
+        return;
+      }
+    }
+  }
+}
+
+function startMove(g) {
+  // 先模拟完整移动，检查是否会被阻挡
+  const result = simulateFullMove(g);
+
+  if (result.blocked) {
+    // 从一开始就动不了，直接闪红
+    animState = {
+      lineId: g.id,
+      timer: 0,
+      stepInterval: STEP_INTERVAL,
+      flashLines: [g.id, result.blocker.id],
+      flashTimer: FLASH_DURATION,
+      moving: false,
+    };
+    return;
+  }
+
+  if (result.exits) {
+    // 路径畅通，播放移动动画
+    animState = {
+      lineId: g.id,
+      timer: 0,
+      stepInterval: STEP_INTERVAL,
+      flashLines: [],
+      flashTimer: 0,
+      moving: true,
+    };
+  }
+}
+
+// ============================================================
+//  动画更新
+// ============================================================
+function updateAnim() {
+  if (!animState) return;
+
+  const dt = deltaTime;
+  const g = gameLines.find(l => l.id === animState.lineId);
+
+  if (animState.flashTimer > 0) {
+    animState.flashTimer -= dt;
+    const progress = Math.max(0, animState.flashTimer / FLASH_DURATION);
+    const flashVal = Math.sin(progress * Math.PI * 4) * 0.6 + 0.4;
+    for (const fid of animState.flashLines) {
+      const fl = gameLines.find(l => l.id === fid);
+      if (fl) fl.flashAlpha = flashVal;
+    }
+    if (animState.flashTimer <= 0) {
+      for (const fid of animState.flashLines) {
+        const fl = gameLines.find(l => l.id === fid);
+        if (fl) fl.flashAlpha = 0;
+      }
+      animState = null;
+      solvable = checkSolvable();
+    }
+    return;
+  }
+
+  if (!animState.moving || !g || !g.alive) {
+    animState = null;
+    solvable = checkSolvable();
+    return;
+  }
+
+  animState.timer += dt;
+  if (animState.timer < animState.stepInterval) return;
+  animState.timer -= animState.stepInterval;
+
+  doOneStep(g);
+}
+
+// ============================================================
+//  执行一步：蛇形移动（路径已确认畅通，无需检测阻挡）
+// ============================================================
+function doOneStep(g) {
+  const { dc, dr } = g.dir;
+  const head = g.cells[0];
+  const nextHead = [head[0] + dc, head[1] + dr];
+
+  g.cells.unshift(nextHead);
+  g.cells.pop();
+
+  const allOffGrid = g.cells.every(([c, r]) =>
+    c < 0 || c >= LEVEL_DATA.cols || r < 0 || r >= LEVEL_DATA.rows
+  );
+  if (allOffGrid) {
+    g.alive = false;
+    animState.moving = false;
+    animState = null;
+    solvable = checkSolvable();
+  }
+}
+
+function findBlocker([c, r], excludeId) {
+  for (const g of gameLines) {
+    if (!g.alive || g.id === excludeId) continue;
+    for (const [lc, lr] of g.cells) {
+      if (lc === c && lr === r) return g;
+    }
+  }
+  return null;
+}
+
+// 模拟完整移动：检查路径是否畅通
+// 返回 { exits: true } 或 { blocked: true, blocker: g }
+function simulateFullMove(g) {
+  const { dc, dr } = g.dir;
+  let cells = g.cells.map(c => [...c]);
+
+  while (true) {
+    const head = cells[0];
+    const next = [head[0] + dc, head[1] + dr];
+
+    // 检查阻挡（只在棋盘内）
+    if (next[0] >= 0 && next[0] < LEVEL_DATA.cols &&
+        next[1] >= 0 && next[1] < LEVEL_DATA.rows) {
+      const blocker = findBlocker(next, g.id);
+      if (blocker) return { blocked: true, blocker };
+    }
+
+    // 前移
+    cells.unshift(next);
+    cells.pop();
+
+    // 全部出界
+    if (cells.every(([c, r]) => c < 0 || c >= LEVEL_DATA.cols || r < 0 || r >= LEVEL_DATA.rows)) {
+      return { exits: true };
+    }
+  }
+}
+
+// ============================================================
+//  可解性检查
+//  模拟点击所有线的排列组合，DFS + 记忆化
+// ============================================================
+function checkSolvable() {
+  const alive = gameLines.filter(g => g.alive);
+  if (alive.length === 0) return true;
+
+  // 构建初始状态：[{id, cells, dir}, ...]
+  const state = alive.map(g => ({
+    id: g.id,
+    cells: g.cells.map(c => [...c]),
+    dir: { ...g.dir }
+  }));
+
+  const visited = new Set();
+  const t0 = Date.now();
+  const TIME_LIMIT = 3000;
+
+  const result = dfs(state, visited, t0, TIME_LIMIT);
+  return result;
+}
+
+// 状态 → 唯一键
+function stateKey(state) {
+  return state.map(g => g.id + ':' + g.cells.map(c => c[0]+','+c[1]).join('|')).sort().join(';');
+}
+
+// 模拟一条线的完整移动，返回移动后的 cells（可能为空）
+function simulateMove(state, idx) {
+  const g = state[idx];
+  const { dc, dr } = g.dir;
+  let cells = g.cells.map(c => [...c]);
+
+  while (true) {
+    const head = cells[0];
+    const next = [head[0] + dc, head[1] + dr];
+
+    // 检查阻挡（只在棋盘内）
+    if (next[0] >= 0 && next[0] < LEVEL_DATA.cols &&
+        next[1] >= 0 && next[1] < LEVEL_DATA.rows) {
+      let blocked = false;
+      for (let j = 0; j < state.length; j++) {
+        if (j === idx || state[j].cells.length === 0) continue;
+        for (const sc of state[j].cells) {
+          if (sc[0] === next[0] && sc[1] === next[1]) { blocked = true; break; }
+        }
+        if (blocked) break;
+      }
+      if (blocked) return cells; // 被挡，停在当前位置
+    }
+
+    // 前移
+    cells.unshift(next);
+    cells.pop();
+
+    // 全部出界
+    if (cells.every(([c, r]) => c < 0 || c >= LEVEL_DATA.cols || r < 0 || r >= LEVEL_DATA.rows)) {
+      return [];
+    }
+  }
+}
+
+// DFS 搜索
+function dfs(state, visited, t0, timeLimit) {
+  if (Date.now() - t0 > timeLimit) return false;
+
+  // 全部消除了
+  if (state.every(g => g.cells.length === 0)) return true;
+
+  const key = stateKey(state);
+  if (visited.has(key)) return false;
+  visited.add(key);
+
+  for (let i = 0; i < state.length; i++) {
+    if (state[i].cells.length === 0) continue;
+
+    const newCells = simulateMove(state, i);
+    const moved = newCells.length !== state[i].cells.length ||
+                  newCells.some((c, k) => c[0] !== state[i].cells[k][0] || c[1] !== state[i].cells[k][1]);
+
+    if (!moved) continue; // 没动，跳过
+
+    const old = state[i].cells;
+    state[i].cells = newCells;
+    if (dfs(state, visited, t0, timeLimit)) {
+      state[i].cells = old;
+      return true;
+    }
+    state[i].cells = old;
+  }
+
+  return false;
+}
+
+// ============================================================
+//  碰撞检测
+// ============================================================
+function checkOverlaps(lines, cols, rows) {
+  const cellMap = new Map();
+  for (const ld of lines) {
+    const cells = expandCells(ld.points);
+    for (const [c, r] of cells) {
+      if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
+      const key = `${c},${r}`;
+      if (!cellMap.has(key)) cellMap.set(key, []);
+      cellMap.get(key).push(ld.id);
+    }
+  }
+  const result = [];
+  for (const [key, ids] of cellMap) {
+    if (ids.length > 1) {
+      const [c, r] = key.split(',').map(Number);
+      result.push({ cell: [c, r], lineIds: ids });
+    }
+  }
+  return { ok: result.length === 0, overlaps: result };
+}
+
+// ============================================================
+//  绘制线段
+// ============================================================
+function drawGameLines() {
+  const halfCell = cellSize / 2;
+  const lineWeight = cellSize * 0.35;
+  const capRadius = lineWeight / 2;
+
+  for (const g of gameLines) {
+    if (!g.alive) continue;
+    const visibleCells = g.cells.filter(([c, r]) =>
+      c >= -2 && c <= LEVEL_DATA.cols + 1 && r >= -2 && r <= LEVEL_DATA.rows + 1
+    );
+    if (visibleCells.length === 0) continue;
+
+    const col = color(g.color);
+    let glowCol, mainCol, brightCol;
+    if (g.flashAlpha > 0) {
+      const flashCol = color(PALETTE.flashColor);
+      glowCol = lerpColor(col, flashCol, g.flashAlpha); glowCol.setAlpha(80);
+      mainCol = lerpColor(col, flashCol, g.flashAlpha);
+      brightCol = lerpColor(col, flashCol, g.flashAlpha); brightCol.setAlpha(200);
+    } else {
+      glowCol = color(g.color); glowCol.setAlpha(40);
+      mainCol = col;
+      brightCol = color(g.color); brightCol.setAlpha(120);
+    }
+
+    stroke(glowCol); strokeWeight(lineWeight + 12); strokeCap(ROUND); strokeJoin(ROUND); noFill();
+    drawCellPath(visibleCells, halfCell);
+    stroke(mainCol); strokeWeight(lineWeight);
+    drawCellPath(visibleCells, halfCell);
+    stroke(brightCol); strokeWeight(lineWeight * 0.35);
+    drawCellPath(visibleCells, halfCell, -lineWeight * 0.15);
+
+    noStroke(); fill(mainCol);
+    const [sc, sr] = visibleCells[0];
+    const [ec, er] = visibleCells[visibleCells.length - 1];
+    circle(gridOriginX + sc * cellSize + halfCell, gridOriginY + sr * cellSize + halfCell, capRadius * 2);
+    circle(gridOriginX + ec * cellSize + halfCell, gridOriginY + er * cellSize + halfCell, capRadius * 2);
+  }
+}
+
+function drawCellPath(cells, halfCell, offsetY = 0) {
+  beginShape();
+  for (const [c, r] of cells) {
+    vertex(gridOriginX + c * cellSize + halfCell, gridOriginY + r * cellSize + halfCell + offsetY);
+  }
+  endShape();
+}
+
+// ============================================================
+//  箭头
+// ============================================================
+function drawArrowHeads() {
+  const halfCell = cellSize / 2;
+  const arrowSize = cellSize * 0.38;
+
+  for (const g of gameLines) {
+    if (!g.alive) continue;
+    const [sc, sr] = g.cells[0];
+    if (sc < 0 || sc >= LEVEL_DATA.cols || sr < 0 || sr >= LEVEL_DATA.rows) continue;
+
+    const ax = gridOriginX + sc * cellSize + halfCell + g.dir.dc * halfCell * 0.65;
+    const ay = gridOriginY + sr * cellSize + halfCell + g.dir.dr * halfCell * 0.65;
+    const angle = Math.atan2(g.dir.dr, g.dir.dc);
+
+    push(); translate(ax, ay); rotate(angle);
+    fill(0, 0, 0, 80); noStroke();
+    drawTriangle(arrowSize + 2, 2);
+    fill(PALETTE.arrowFill); stroke(PALETTE.arrow); strokeWeight(1.5);
+    drawTriangle(arrowSize, 0);
+    pop();
+  }
+}
+
+function drawTriangle(size, offset) {
+  const h = size * 0.8;
+  beginShape();
+  vertex(h + offset, 0);
+  vertex(-h * 0.3 + offset, -size * 0.5);
+  vertex(-h * 0.3 + offset,  size * 0.5);
+  endShape(CLOSE);
+}
+
+// ============================================================
+//  网格
+// ============================================================
+function drawGrid() {
+  const { cols, rows } = LEVEL_DATA;
+  stroke(PALETTE.gridLine); strokeWeight(1);
+  for (let c = 0; c <= cols; c++) {
+    const x = gridOriginX + c * cellSize;
+    window.line(x, gridOriginY, x, gridOriginY + rows * cellSize);
+  }
+  for (let r = 0; r <= rows; r++) {
+    const y = gridOriginY + r * cellSize;
+    window.line(gridOriginX, y, gridOriginX + cols * cellSize, y);
+  }
+  fill(PALETTE.gridDot); noStroke();
+  for (let c = 0; c <= cols; c++) {
+    for (let r = 0; r <= rows; r++) {
+      circle(gridOriginX + c * cellSize, gridOriginY + r * cellSize, 4);
+    }
+  }
+}
+
+function drawOverlapCells() {
+  if (overlaps.length === 0) return;
+  for (const ov of overlaps) {
+    const [c, r] = ov.cell;
+    const x = gridOriginX + c * cellSize;
+    const y = gridOriginY + r * cellSize;
+    noStroke(); fill(PALETTE.overlapCell);
+    rect(x + 2, y + 2, cellSize - 4, cellSize - 4, 4);
+    noFill(); stroke(PALETTE.overlapBorder); strokeWeight(2);
+    rect(x + 1, y + 1, cellSize - 2, cellSize - 2, 4);
+  }
+}
+
+// ============================================================
+//  HUD
+// ============================================================
+function drawHUD() {
+  const alive = gameLines.filter(l => l.alive).length;
+  noStroke(); textAlign(LEFT, TOP); textSize(14);
+
+  // 可解状态
+  const solvText = solvable === null ? '检查中...' : solvable ? '✅ 有解' : '❌ 无解';
+  const solvColor = solvable === null ? '#aaa' : solvable ? '#81c784' : '#ef5350';
+
+  fill(200);
+  text(`线段: ${alive}/${gameLines.length}  |  ${solvText}  |  点击线段移动  |  R 重新生成`, 16, 16);
+
+  // 无解时大字提示
+  if (solvable === false) {
+    fill(solvColor);
+    textSize(24);
+    textAlign(CENTER, CENTER);
+    text('当前局面无解，按 R 重新生成', width / 2, height - 50);
+  }
+}
+
+// ============================================================
+//  布局 & 工具
+// ============================================================
+function calculateLayout() {
+  const { cols, rows } = LEVEL_DATA;
+  const padding = 60;
+  cellSize = Math.min(Math.floor((width - padding * 2) / (cols + 0.5)), Math.floor((height - padding * 2) / (rows + 0.5)));
+  cellSize = Math.max(cellSize, 30);
+  gridOriginX = (width - cols * cellSize) / 2;
+  gridOriginY = (height - rows * cellSize) / 2;
+}
+
+function expandCells(points) {
+  const cells = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const [c1, r1] = points[i];
+    const [c2, r2] = points[i + 1];
+    const dc = Math.sign(c2 - c1), dr = Math.sign(r2 - r1);
+    let c = c1, r = r1;
+    while (c !== c2 || r !== r2) { cells.push([c, r]); c += dc; r += dr; }
+  }
+  cells.push([...points[points.length - 1]]);
+  return cells;
+}
+
+// ============================================================
+//  关卡生成（生成后验证可解性）
+// ============================================================
+function generateLevel() {
+  const { cols, rows } = LEVEL_DATA;
+  const numLines = Math.floor(cols * rows * 0.22);
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+
+  function walk(c, r, dc, dr, steps) {
+    const pts = [[c, r]];
+    let cc = c, rr = r;
+    for (let s = 0; s < steps; s++) {
+      cc += dc; rr += dr;
+      if (cc < 0 || cc >= cols || rr < 0 || rr >= rows) return null;
+      pts.push([cc, rr]);
+    }
+    return pts;
+  }
+
+  function simplifyPoints(points) {
+    if (points.length <= 2) return points;
+    const result = [points[0]];
+    for (let i = 1; i < points.length - 1; i++) {
+      const [pc, pr] = result[result.length - 1];
+      const [cc, cr] = points[i];
+      const [nc, nr] = points[i + 1];
+      if (Math.sign(cc - pc) !== Math.sign(nc - cc) || Math.sign(cr - pr) !== Math.sign(nr - cr))
+        result.push(points[i]);
+    }
+    result.push(points[points.length - 1]);
+    return result;
+  }
+
+  // 尝试生成可解关卡
+  for (let genAttempt = 0; genAttempt < 20; genAttempt++) {
+    const generated = [];
+    let lineId = 1;
+
+    for (let attempt = 0; attempt < 800 && generated.length < numLines; attempt++) {
+      const numSegs = Math.random() < 0.4 ? 2 : 3;
+      const startC = Math.floor(Math.random() * cols);
+      const startR = Math.floor(Math.random() * rows);
+      const d1 = dirs[Math.floor(Math.random() * 4)];
+      const len1 = Math.floor(Math.random() * 3) + 1;
+      const seg1 = walk(startC, startR, d1[0], d1[1], len1);
+      if (!seg1) continue;
+
+      let allPoints = [...seg1];
+      if (numSegs >= 3) {
+        const turnDirs = dirs.filter(d => !(d[0] === d1[0] && d[1] === d1[1]) && !(d[0] === -d1[0] && d[1] === -d1[1]));
+        const d2 = turnDirs[Math.floor(Math.random() * turnDirs.length)];
+        const lastP = seg1[seg1.length - 1];
+        const len2 = Math.floor(Math.random() * 3) + 1;
+        const seg2 = walk(lastP[0], lastP[1], d2[0], d2[1], len2);
+        if (!seg2) continue;
+        allPoints = [...allPoints, ...seg2.slice(1)];
+      }
+
+      const simplified = simplifyPoints(allPoints);
+      const testLine = { id: lineId, points: simplified };
+      if (checkOverlaps([...generated, testLine], cols, rows).ok) {
+        generated.push(testLine);
+        lineId++;
+      }
+    }
+
+    LEVEL_DATA.lines = generated;
+
+    // 验证可解性
+    const testGameLines = generated.map((ld, idx) => {
+      const cells = expandCells(ld.points);
+      const [c0, r0] = ld.points[0];
+      const [c1, r1] = ld.points[1];
+      return {
+        id: ld.id,
+        cells: cells,
+        dir: { dc: Math.sign(c0 - c1), dr: Math.sign(r0 - r1) },
+        alive: true,
+      };
+    });
+
+    const testState = testGameLines.map(g => ({
+      id: g.id, cells: g.cells.map(c => [...c]), dir: { ...g.dir }
+    }));
+
+    const visited = new Set();
+    if (dfs(testState, visited, Date.now(), 3000)) {
+      console.log(`✅ 第 ${genAttempt + 1} 次尝试生成可解关卡`);
+      return;
+    }
+    console.log(`⚠️ 第 ${genAttempt + 1} 次生成的关卡无解，重试...`);
+  }
+
+  console.warn('未能生成可解关卡');
+}
+
+function keyPressed() {
+  if (key === 'r' || key === 'R') {
+    animState = null;
+    LEVEL_DATA.lines = [];
+    generateLevel();
+    calculateLayout();
+    initGameLines();
+    overlaps = [];
+    solvable = checkSolvable();
+  }
+  if (key === 's' || key === 'S') saveCanvas('arrow-puzzle', 'png');
+}
+
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+  calculateLayout();
+}
+</script>
+</body>
+</html>

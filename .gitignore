@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.local
+.DS_Store
+_setup.py
+_git_setup.py
+.git-credentials-token
