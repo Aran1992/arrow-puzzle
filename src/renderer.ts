@@ -201,3 +201,106 @@ export function drawHUD(container: Container, appWidth: number, appHeight: numbe
     container.addChild(warn);
   }
 }
+
+// ── Victory overlay ──
+
+export function drawVictoryOverlay(container: Container, appWidth: number, appHeight: number): void {
+  container.removeChildren();
+  if (!state.victory) return;
+
+  // Semi-transparent backdrop
+  const backdrop = new Graphics();
+  const backdropAlpha = Math.min(state.victory.timer / 500, 0.6);
+  backdrop.rect(0, 0, appWidth, appHeight);
+  backdrop.fill({ color: 0x000000, alpha: backdropAlpha });
+  container.addChild(backdrop);
+
+  // Particles
+  for (const p of state.victory.particles) {
+    const alpha = Math.max(0, p.life / p.maxLife);
+    const g = new Graphics();
+
+    // Draw different shapes for variety
+    const shapeType = Math.floor(p.color) % 3;
+    if (shapeType === 0) {
+      // Circle
+      g.circle(0, 0, p.size);
+      g.fill({ color: p.color, alpha });
+    } else if (shapeType === 1) {
+      // Star / diamond
+      g.moveTo(0, -p.size);
+      g.lineTo(p.size * 0.6, 0);
+      g.lineTo(0, p.size);
+      g.lineTo(-p.size * 0.6, 0);
+      g.closePath();
+      g.fill({ color: p.color, alpha });
+    } else {
+      // Square
+      g.rect(-p.size / 2, -p.size / 2, p.size, p.size);
+      g.fill({ color: p.color, alpha });
+    }
+
+    g.x = p.x;
+    g.y = p.y;
+    g.rotation = p.rotation;
+    container.addChild(g);
+  }
+
+  // Victory text with pop-in animation
+  if (state.victory.textScale > 0) {
+    const text = new Text({
+      text: '🎉 胜利！',
+      style: {
+        fontSize: 64,
+        fill: 0xffd54f,
+        fontFamily: 'sans-serif',
+        fontWeight: 'bold',
+        dropShadow: {
+          color: 0x000000,
+          blur: 8,
+          distance: 3,
+          alpha: 0.6,
+        },
+      },
+    });
+    text.anchor.set(0.5);
+    text.x = appWidth / 2;
+    text.y = appHeight / 2 - 60;
+    text.scale.set(state.victory.textScale);
+    container.addChild(text);
+  }
+
+  // "Play Again" button
+  if (state.victory.buttonAlpha > 0) {
+    const btnContainer = new Container();
+    const btnWidth = 200;
+    const btnHeight = 52;
+    const btnX = appWidth / 2;
+    const btnY = appHeight / 2 + 40;
+
+    // Button background with rounded corners
+    const btnBg = new Graphics();
+    btnBg.roundRect(-btnWidth / 2, -btnHeight / 2, btnWidth, btnHeight, 26);
+    btnBg.fill({ color: 0xffd54f, alpha: state.victory.buttonAlpha });
+    btnBg.stroke({ width: 2, color: 0xffe082, alpha: state.victory.buttonAlpha });
+
+    // Button text
+    const btnText = new Text({
+      text: '再来一局',
+      style: {
+        fontSize: 22,
+        fill: 0x0b1120,
+        fontFamily: 'sans-serif',
+        fontWeight: 'bold',
+      },
+    });
+    btnText.anchor.set(0.5);
+    btnText.alpha = state.victory.buttonAlpha;
+
+    btnContainer.addChild(btnBg, btnText);
+    btnContainer.x = btnX;
+    btnContainer.y = btnY;
+
+    container.addChild(btnContainer);
+  }
+}

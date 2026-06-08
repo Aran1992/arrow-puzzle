@@ -26,3 +26,9 @@ export const STEP_INTERVAL = 80;
 export const FLASH_DURATION = 500;
 export const DEFAULT_COLS = 7;
 export const DEFAULT_ROWS = 8;
+
+// Victory
+export const VICTORY_COLORS = [0xffd54f, 0x4fc3f7, 0x81c784, 0xf06292, 0xba68c8, 0xff7043, 0x4dd0e1, 0xfff176, 0xef5350, 0x64ffda];
+export const VICTORY_PARTICLE_COUNT = 80;
+export const VICTORY_TEXT_DELAY = 300;
+export const VICTORY_BUTTON_DELAY = 800;

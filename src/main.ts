@@ -4,8 +4,8 @@ import { PALETTE } from './constants';
 import { calculateLayout } from './geometry';
 import { generateLevel } from './level-generator';
 import { checkSolvableFromGameLines } from './solver';
-import { initGameLines, updateAnim } from './game-logic';
-import { drawGrid, drawGameLines, drawArrowHeads, drawOverlapCells, drawHUD } from './renderer';
+import { initGameLines, updateAnim, updateVictory } from './game-logic';
+import { drawGrid, drawGameLines, drawArrowHeads, drawOverlapCells, drawHUD, drawVictoryOverlay } from './renderer';
 import { editor, drawEditorLayer, drawEditorHUD } from './editor';
 import { handleClick, handleKeyDown, handlePointerMove } from './input';
 import './style.css';
@@ -27,7 +27,8 @@ async function main(): Promise<void> {
   const editorLayer = new Container();
   const arrowLayer = new Container();
   const hudLayer = new Container();
-  app.stage.addChild(gridLayer, overlapLayer, linesLayer, editorLayer, arrowLayer, hudLayer);
+  const victoryLayer = new Container();
+  app.stage.addChild(gridLayer, overlapLayer, linesLayer, editorLayer, arrowLayer, hudLayer, victoryLayer);
 
   app.stage.eventMode = 'static';
   app.stage.hitArea = app.screen;
@@ -51,6 +52,7 @@ async function main(): Promise<void> {
   app.ticker.add((ticker) => {
     if (editor.mode === 'play') {
       updateAnim(ticker.deltaMS);
+      updateVictory(ticker.deltaMS);
     }
     drawGrid(gridLayer);
     drawOverlapCells(overlapLayer);
@@ -62,6 +64,7 @@ async function main(): Promise<void> {
     } else {
       drawHUD(hudLayer, app.screen.width, app.screen.height);
     }
+    drawVictoryOverlay(victoryLayer, app.screen.width, app.screen.height);
   });
 
   // Input

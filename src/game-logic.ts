@@ -1,6 +1,6 @@
 import type { GameLine, SimResult } from './types';
-import { state } from './state';
-import { STEP_INTERVAL, FLASH_DURATION, PALETTE } from './constants';
+import { state, type VictoryParticle } from './state';
+import { STEP_INTERVAL, FLASH_DURATION, PALETTE, VICTORY_COLORS, VICTORY_PARTICLE_COUNT } from './constants';
 import { expandCells } from './geometry';
 import { checkSolvableFromGameLines } from './solver';
 
@@ -72,6 +72,70 @@ export function doOneStep(g: GameLine): void {
     if (state.animState) state.animState.moving = false;
     state.animState = null;
     state.solvable = checkSolvableFromGameLines(state.gameLines, cols, rows);
+
+    // Victory check: all lines cleared
+    if (state.gameLines.every((l) => !l.alive)) {
+      triggerVictory();
+    }
+  }
+}
+
+function triggerVictory(): void {
+  const particles: VictoryParticle[] = [];
+  const cx = state.gridOriginX + (state.levelData.cols * state.cellSize) / 2;
+  const cy = state.gridOriginY + (state.levelData.rows * state.cellSize) / 2;
+
+  for (let i = 0; i < VICTORY_PARTICLE_COUNT; i++) {
+    const angle = (Math.PI * 2 * i) / VICTORY_PARTICLE_COUNT + (Math.random() - 0.5) * 0.5;
+    const speed = 80 + Math.random() * 250;
+    const life = 1500 + Math.random() * 2000;
+    particles.push({
+      x: cx + (Math.random() - 0.5) * 40,
+      y: cy + (Math.random() - 0.5) * 40,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      color: VICTORY_COLORS[Math.floor(Math.random() * VICTORY_COLORS.length)],
+      size: 3 + Math.random() * 6,
+      life,
+      maxLife: life,
+      rotation: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 8,
+    });
+  }
+
+  state.victory = {
+    timer: 0,
+    particles,
+    textScale: 0,
+    buttonAlpha: 0,
+  };
+}
+
+export function updateVictory(dt: number): void {
+  if (!state.victory) return;
+  state.victory.timer += dt;
+
+  // Update particles
+  for (const p of state.victory.particles) {
+    p.x += p.vx * (dt / 1000);
+    p.y += p.vy * (dt / 1000);
+    p.vy += 120 * (dt / 1000); // gravity
+    p.life -= dt;
+    p.rotation += p.rotSpeed * (dt / 1000);
+  }
+  // Remove dead particles
+  state.victory.particles = state.victory.particles.filter((p) => p.life > 0);
+
+  // Text pop-in
+  if (state.victory.timer > 300) {
+    const t = Math.min((state.victory.timer - 300) / 200, 1);
+    // Elastic ease out
+    state.victory.textScale = t === 1 ? 1 : 1 - Math.pow(2, -10 * t) * Math.cos((t * 10 - 0.75) * ((2 * Math.PI) / 3));
+  }
+
+  // Button fade-in
+  if (state.victory.timer > 800) {
+    state.victory.buttonAlpha = Math.min((state.victory.timer - 800) / 400, 1);
   }
 }
 

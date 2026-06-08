@@ -6,11 +6,45 @@ import { generateLevel } from './level-generator';
 import { editor, handleEditorClick, handleEditorKey, updatePointer, refreshAfterEdit } from './editor';
 import type { Application, FederatedPointerEvent } from 'pixi.js';
 
-export function handleClick(e: FederatedPointerEvent, _app: Application): void {
+function resetGame(app: Application): void {
+  state.victory = null;
+  state.animState = null;
+  state.levelData.lines = generateLevel(state.levelData.cols, state.levelData.rows);
+  const layout = calculateLayout(state.levelData.cols, state.levelData.rows, app.screen.width, app.screen.height);
+  state.cellSize = layout.cellSize;
+  state.gridOriginX = layout.gridOriginX;
+  state.gridOriginY = layout.gridOriginY;
+  initGameLines();
+  state.overlaps = [];
+  state.solvable = checkSolvableFromGameLines(state.gameLines, state.levelData.cols, state.levelData.rows);
+}
+
+function isInsideButton(x: number, y: number, appWidth: number, appHeight: number): boolean {
+  const btnWidth = 200;
+  const btnHeight = 52;
+  const btnX = appWidth / 2;
+  const btnY = appHeight / 2 + 40;
+  return (
+    x >= btnX - btnWidth / 2 &&
+    x <= btnX + btnWidth / 2 &&
+    y >= btnY - btnHeight / 2 &&
+    y <= btnY + btnHeight / 2
+  );
+}
+
+export function handleClick(e: FederatedPointerEvent, app: Application): void {
   if (editor.mode === 'edit') {
     const handled = handleEditorClick(e);
     if (handled) refreshAfterEdit();
     return;
+  }
+
+  // Victory screen — check "Play Again" button
+  if (state.victory && state.victory.buttonAlpha >= 0.9) {
+    if (isInsideButton(e.global.x, e.global.y, app.screen.width, app.screen.height)) {
+      resetGame(app);
+    }
+    return; // Block all other clicks during victory
   }
 
   // Play mode
@@ -47,19 +81,7 @@ export function handleKeyDown(e: KeyboardEvent, app: Application): void {
   // Play mode keys
   if (editor.mode === 'play') {
     if (e.key === 'r' || e.key === 'R') {
-      state.animState = null;
-      state.levelData.lines = generateLevel(state.levelData.cols, state.levelData.rows);
-      const layout = calculateLayout(state.levelData.cols, state.levelData.rows, app.screen.width, app.screen.height);
-      state.cellSize = layout.cellSize;
-      state.gridOriginX = layout.gridOriginX;
-      state.gridOriginY = layout.gridOriginY;
-      initGameLines();
-      state.overlaps = [];
-      state.solvable = checkSolvableFromGameLines(
-        state.gameLines,
-        state.levelData.cols,
-        state.levelData.rows,
-      );
+      resetGame(app);
     }
   }
 }
