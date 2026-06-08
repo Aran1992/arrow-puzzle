@@ -35,6 +35,7 @@ export interface AnimState {
   flashLines: number[];
   flashTimer: number;
   moving: boolean;
+  offset: number; // 0→1 sub-cell interpolation progress
 }
 
 export type SimResult = { blocked: true; blocker: GameLine } | { exits: true };

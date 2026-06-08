@@ -150,6 +150,7 @@ export function startMove(g: GameLine): void {
       flashLines: [g.id, result.blocker.id],
       flashTimer: FLASH_DURATION,
       moving: false,
+      offset: 0,
     };
     return;
   }
@@ -161,6 +162,7 @@ export function startMove(g: GameLine): void {
     flashLines: [],
     flashTimer: 0,
     moving: true,
+    offset: 0,
   };
 }
 
@@ -203,8 +205,12 @@ export function updateAnim(dt: number): void {
   }
 
   state.animState.timer += dt;
-  if (state.animState.timer < state.animState.stepInterval) return;
-  state.animState.timer -= state.animState.stepInterval;
+  const step = state.animState.stepInterval;
+  state.animState.offset = Math.min(state.animState.timer / step, 1);
+
+  if (state.animState.timer < step) return;
+  state.animState.timer -= step;
+  state.animState.offset = 0;
 
   doOneStep(g);
 }
