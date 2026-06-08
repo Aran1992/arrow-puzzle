@@ -9,18 +9,19 @@ function lerpColor(c1: number, c2: number, t: number): number {
   return new Color([a.red + (b.red - a.red) * t, a.green + (b.green - a.green) * t, a.blue + (b.blue - a.blue) * t]).toNumber();
 }
 
-function drawCellPath(g: Graphics, cells: [number, number][], halfCell: number, offsetY = 0, offX = 0, offY = 0): void {
+function drawCellPath(g: Graphics, cells: [number, number][], halfCell: number, offsetY = 0, headOffX = 0, headOffY = 0): void {
   if (cells.length === 0) return;
-  const pts: number[] = [];
-  for (const [c, r] of cells) {
-    pts.push(
-      state.gridOriginX + c * state.cellSize + halfCell + offX,
-      state.gridOriginY + r * state.cellSize + halfCell + offsetY + offY,
+  const [c0, r0] = cells[0];
+  g.moveTo(
+    state.gridOriginX + c0 * state.cellSize + halfCell + headOffX,
+    state.gridOriginY + r0 * state.cellSize + halfCell + offsetY + headOffY,
+  );
+  for (let i = 1; i < cells.length; i++) {
+    const [c, r] = cells[i];
+    g.lineTo(
+      state.gridOriginX + c * state.cellSize + halfCell,
+      state.gridOriginY + r * state.cellSize + halfCell + offsetY,
     );
-  }
-  g.moveTo(pts[0], pts[1]);
-  for (let i = 2; i < pts.length; i += 2) {
-    g.lineTo(pts[i], pts[i + 1]);
   }
 }
 
@@ -89,26 +90,26 @@ export function drawGameLines(container: Container): void {
       brightAlpha = 0.45;
     }
 
-    // Per-line offset: only the moving line gets the smooth shift
+    // Per-line offset: only the head cell of the moving line gets the smooth shift
     const isMoving = state.animState && state.animState.moving && gl.id === state.animState.lineId;
-    const lox = isMoving ? offX : 0;
-    const loy = isMoving ? offY : 0;
+    const headX = isMoving ? offX : 0;
+    const headY = isMoving ? offY : 0;
 
     const g = new Graphics();
 
     // Glow layer
     g.setStrokeStyle({ width: lineWeight + 12, color: mainColor, alpha: glowAlpha, cap: 'round', join: 'round' });
-    drawCellPath(g, visibleCells, halfCell, 0, lox, loy);
+    drawCellPath(g, visibleCells, halfCell, 0, headX, headY);
     g.stroke();
 
     // Main line
     g.setStrokeStyle({ width: lineWeight, color: mainColor, cap: 'round', join: 'round' });
-    drawCellPath(g, visibleCells, halfCell, 0, lox, loy);
+    drawCellPath(g, visibleCells, halfCell, 0, headX, headY);
     g.stroke();
 
     // Highlight
     g.setStrokeStyle({ width: lineWeight * 0.35, color: mainColor, alpha: brightAlpha, cap: 'round', join: 'round' });
-    drawCellPath(g, visibleCells, halfCell, -lineWeight * 0.15, lox, loy);
+    drawCellPath(g, visibleCells, halfCell, -lineWeight * 0.15, headX, headY);
     g.stroke();
 
     // Round caps
@@ -116,13 +117,13 @@ export function drawGameLines(container: Container): void {
     const [sc, sr] = visibleCells[0];
     const [ec, er] = visibleCells[visibleCells.length - 1];
     g.circle(
-      state.gridOriginX + sc * state.cellSize + halfCell + lox,
-      state.gridOriginY + sr * state.cellSize + halfCell + loy,
+      state.gridOriginX + sc * state.cellSize + halfCell + headX,
+      state.gridOriginY + sr * state.cellSize + halfCell + headY,
       capRadius,
     );
     g.circle(
-      state.gridOriginX + ec * state.cellSize + halfCell + lox,
-      state.gridOriginY + er * state.cellSize + halfCell + loy,
+      state.gridOriginX + ec * state.cellSize + halfCell,
+      state.gridOriginY + er * state.cellSize + halfCell,
       capRadius,
     );
     g.fill({ color: mainColor });
@@ -141,15 +142,15 @@ export function drawArrowHeads(container: Container): void {
     const [sc, sr] = gl.cells[0];
     if (sc < 0 || sc >= state.levelData.cols || sr < 0 || sr >= state.levelData.rows) continue;
 
-    // Sub-cell offset for the moving line
-    let lox = 0, loy = 0;
+    // Sub-cell offset for the moving line's head
+    let headOX = 0, headOY = 0;
     if (state.animState && state.animState.moving && gl.id === state.animState.lineId) {
-      lox = gl.dir.dc * state.cellSize * state.animState.offset;
-      loy = gl.dir.dr * state.cellSize * state.animState.offset;
+      headOX = gl.dir.dc * state.cellSize * state.animState.offset;
+      headOY = gl.dir.dr * state.cellSize * state.animState.offset;
     }
 
-    const ax = state.gridOriginX + sc * state.cellSize + halfCell + gl.dir.dc * halfCell * 0.65 + lox;
-    const ay = state.gridOriginY + sr * state.cellSize + halfCell + gl.dir.dr * halfCell * 0.65 + loy;
+    const ax = state.gridOriginX + sc * state.cellSize + halfCell + gl.dir.dc * halfCell * 0.65 + headOX;
+    const ay = state.gridOriginY + sr * state.cellSize + halfCell + gl.dir.dr * halfCell * 0.65 + headOY;
     const angle = Math.atan2(gl.dir.dr, gl.dir.dc);
     const h = arrowSize * 0.8;
     const w = arrowSize * 0.5;
