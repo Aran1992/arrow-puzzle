@@ -1,15 +1,25 @@
-import type { LineData, SolverState } from './types';
-import { expandCells, checkOverlaps } from './geometry';
-import { dfs } from './solver';
+import type { LineData } from './types';
+import { checkOverlaps, verifyLevelSolvable } from './game-engine';
+import type { LevelData } from './game-engine';
 
+/**
+ * 生成一个保证有解的关卡
+ *
+ * 流程：随机生成线段 → 贪心验证可解性 → 无解则无限重试
+ * 使用 game-engine.ts 的 verifyLevelSolvable 算法（微秒级）。
+ * 保证永远返回非空数组。
+ */
 export function generateLevel(cols: number, rows: number): LineData[] {
-  const numLines = Math.floor(cols * rows * 0.22);
   const dirs: [number, number][] = [
     [1, 0],
     [-1, 0],
     [0, 1],
     [0, -1],
   ];
+
+  // 线段密度随网格大小自适应：小网格用 0.22，大网格适当降低避免死锁
+  const density = cols * rows <= 64 ? 0.22 : Math.max(0.12, 0.22 - (cols * rows - 64) * 0.0008);
+  const numLines = Math.max(3, Math.floor(cols * rows * density));
 
   function walk(
     c: number,
@@ -45,7 +55,10 @@ export function generateLevel(cols: number, rows: number): LineData[] {
     return result;
   }
 
-  for (let genAttempt = 0; genAttempt < 20; genAttempt++) {
+  // 无限重试，直到生成可解关卡
+  let genAttempt = 0;
+  while (true) {
+    genAttempt++;
     const generated: LineData[] = [];
     let lineId = 1;
 
@@ -79,25 +92,19 @@ export function generateLevel(cols: number, rows: number): LineData[] {
       }
     }
 
-    const testState: SolverState[] = generated.map((ld) => {
-      const cells = expandCells(ld.points);
-      const [c0, r0] = ld.points[0];
-      const [c1, r1] = ld.points[1];
-      return {
-        id: ld.id,
-        cells,
-        dir: { dc: Math.sign(c0 - c1), dr: Math.sign(r0 - r1) },
-      };
-    });
+    if (generated.length === 0) continue;
 
-    const visited = new Set<string>();
-    if (dfs(testState, visited, Date.now(), 3000, cols, rows)) {
-      console.log(`✅ 第 ${genAttempt + 1} 次尝试生成可解关卡`);
+    // 用纯数据贪心验证可解性（微秒级）
+    const levelData: LevelData = { cols, rows, lines: generated };
+    const { solvable } = verifyLevelSolvable(levelData);
+
+    if (solvable) {
+      console.log(`✅ 第 ${genAttempt} 次尝试，生成 ${generated.length} 条可解线段`);
       return generated;
     }
-    console.log(`⚠️ 第 ${genAttempt + 1} 次生成的关卡无解，重试...`);
+    // 每 50 次打印一次进度
+    if (genAttempt % 50 === 0) {
+      console.log(`⏳ 已尝试 ${genAttempt} 次，继续寻找可解关卡...`);
+    }
   }
-
-  console.warn('未能生成可解关卡');
-  return [];
 }

@@ -1,25 +1,26 @@
 import type { GameLine, SimResult } from './types';
 import { state, type VictoryParticle } from './state';
 import { STEP_INTERVAL, FLASH_DURATION, PALETTE, VICTORY_COLORS, VICTORY_PARTICLE_COUNT } from './constants';
-import { expandCells } from './geometry';
 import { checkSolvableFromGameLines } from './solver';
+import { createGridLine } from './game-engine';
+
+// ── 初始化 ────────────────────────────────────────────────────
 
 export function initGameLines(): void {
   state.gameLines = state.levelData.lines.map((ld, idx) => {
-    const cells = expandCells(ld.points);
-    const [c0, r0] = ld.points[0];
-    const [c1, r1] = ld.points[1];
-    const dir = { dc: Math.sign(c0 - c1), dr: Math.sign(r0 - r1) };
+    const gl = createGridLine(ld);
     return {
-      id: ld.id,
-      cells,
-      dir,
+      id: gl.id,
+      cells: gl.cells,
+      dir: gl.dir,
       color: PALETTE.lineColors[idx % PALETTE.lineColors.length],
       flashAlpha: 0,
       alive: true,
     };
   });
 }
+
+// ── 碰撞检测 ──────────────────────────────────────────────────
 
 export function findBlocker(target: [number, number], excludeId: number): GameLine | null {
   const [c, r] = target;
@@ -32,10 +33,12 @@ export function findBlocker(target: [number, number], excludeId: number): GameLi
   return null;
 }
 
+// ── 模拟完整移动 ──────────────────────────────────────────────
+
 export function simulateFullMove(g: GameLine): SimResult {
   const { dc, dr } = g.dir;
   const { cols, rows } = state.levelData;
-  const cells: [number, number][] = g.cells.map((c) => [c[0], c[1]] as [number, number]);
+  const cells: [number, number][] = g.cells.map((c) => [c[0], c[1]]);
 
   while (true) {
     const head = cells[0];
@@ -56,6 +59,8 @@ export function simulateFullMove(g: GameLine): SimResult {
     }
   }
 }
+
+// ── 单步移动 ──────────────────────────────────────────────────
 
 export function doOneStep(g: GameLine): void {
   const { dc, dr } = g.dir;
@@ -79,6 +84,8 @@ export function doOneStep(g: GameLine): void {
     }
   }
 }
+
+// ── 胜利 ──────────────────────────────────────────────────────
 
 function triggerVictory(): void {
   const particles: VictoryParticle[] = [];
@@ -115,29 +122,26 @@ export function updateVictory(dt: number): void {
   if (!state.victory) return;
   state.victory.timer += dt;
 
-  // Update particles
   for (const p of state.victory.particles) {
     p.x += p.vx * (dt / 1000);
     p.y += p.vy * (dt / 1000);
-    p.vy += 120 * (dt / 1000); // gravity
+    p.vy += 120 * (dt / 1000);
     p.life -= dt;
     p.rotation += p.rotSpeed * (dt / 1000);
   }
-  // Remove dead particles
   state.victory.particles = state.victory.particles.filter((p) => p.life > 0);
 
-  // Text pop-in
   if (state.victory.timer > 300) {
     const t = Math.min((state.victory.timer - 300) / 200, 1);
-    // Elastic ease out
     state.victory.textScale = t === 1 ? 1 : 1 - Math.pow(2, -10 * t) * Math.cos((t * 10 - 0.75) * ((2 * Math.PI) / 3));
   }
 
-  // Button fade-in
   if (state.victory.timer > 800) {
     state.victory.buttonAlpha = Math.min((state.victory.timer - 800) / 400, 1);
   }
 }
+
+// ── 动画控制 ──────────────────────────────────────────────────
 
 export function startMove(g: GameLine): void {
   const result = simulateFullMove(g);
