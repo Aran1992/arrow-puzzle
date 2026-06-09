@@ -3,6 +3,14 @@ import { state } from './state';
 import { PALETTE } from './constants';
 import type { GameLine } from './types';
 
+/** 销毁容器内所有子对象，释放 GPU 资源，防止内存泄漏 */
+function clearContainer(container: Container): void {
+  const children = container.removeChildren();
+  for (const child of children) {
+    child.destroy();
+  }
+}
+
 function lerpColor(c1: number, c2: number, t: number): number {
   const a = new Color(c1);
   const b = new Color(c2);
@@ -32,7 +40,7 @@ function getVisibleCells(g: GameLine): [number, number][] {
 }
 
 export function drawGrid(container: Container): void {
-  container.removeChildren();
+  clearContainer(container);
   const { cols, rows } = state.levelData;
   const g = new Graphics();
 
@@ -58,7 +66,7 @@ export function drawGrid(container: Container): void {
 }
 
 export function drawGameLines(container: Container): void {
-  container.removeChildren();
+  clearContainer(container);
   const halfCell = state.cellSize / 2;
   const lineWeight = state.cellSize * 0.35;
 
@@ -133,7 +141,7 @@ export function drawGameLines(container: Container): void {
 }
 
 export function drawArrowHeads(container: Container): void {
-  container.removeChildren();
+  clearContainer(container);
   const halfCell = state.cellSize / 2;
   const arrowSize = state.cellSize * 0.38;
 
@@ -181,7 +189,7 @@ export function drawArrowHeads(container: Container): void {
 }
 
 export function drawOverlapCells(container: Container): void {
-  container.removeChildren();
+  clearContainer(container);
   if (state.overlaps.length === 0) return;
 
   for (const ov of state.overlaps) {
@@ -201,7 +209,7 @@ export function drawOverlapCells(container: Container): void {
 }
 
 export function drawHUD(container: Container, appWidth: number, appHeight: number): void {
-  container.removeChildren();
+  clearContainer(container);
   const alive = state.gameLines.filter((l) => l.alive).length;
 
   const solvText = state.solvable === null ? '检查中...' : state.solvable ? '✅ 有解' : '❌ 无解';
@@ -228,7 +236,7 @@ export function drawHUD(container: Container, appWidth: number, appHeight: numbe
 // ── Victory overlay ──
 
 export function drawVictoryOverlay(container: Container, appWidth: number, appHeight: number): void {
-  container.removeChildren();
+  clearContainer(container);
   if (!state.victory) return;
 
   // Semi-transparent backdrop

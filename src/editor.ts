@@ -6,6 +6,14 @@ import { initGameLines } from './game-logic';
 import { checkSolvableFromGameLines } from './solver';
 import type { EditorState } from './types';
 
+/** 销毁容器内所有子对象，释放 GPU 资源，防止内存泄漏 */
+function clearContainer(container: Container): void {
+  const children = container.removeChildren();
+  for (const child of children) {
+    child.destroy();
+  }
+}
+
 // ── Editor state ─────────────────────────────────────────────────────
 export const editor: EditorState = {
   mode: 'play',
@@ -321,7 +329,7 @@ export function refreshAfterEdit(): void {
 
 // ── Rendering ────────────────────────────────────────────────────────
 export function drawEditorLayer(container: Container): void {
-  container.removeChildren();
+  clearContainer(container);
   if (editor.mode !== 'edit') return;
 
   const half = state.cellSize / 2;
@@ -439,7 +447,7 @@ export function drawEditorLayer(container: Container): void {
 }
 
 export function drawEditorHUD(container: Container, appWidth: number, appHeight: number): void {
-  container.removeChildren();
+  clearContainer(container);
   if (editor.mode !== 'edit') return;
 
   // ── Top bar ─────────────────────────────────────────────────────────
