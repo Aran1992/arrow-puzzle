@@ -2,14 +2,7 @@ import { Container, Graphics, Color, Text } from 'pixi.js';
 import { state } from './state';
 import { PALETTE } from './constants';
 import type { GameLine } from './types';
-
-/** 销毁容器内所有子对象，释放 GPU 资源，防止内存泄漏 */
-function clearContainer(container: Container): void {
-  const children = container.removeChildren();
-  for (const child of children) {
-    child.destroy();
-  }
-}
+import { graphicsPool, clearContainerToPool } from './object-pool';
 
 function lerpColor(c1: number, c2: number, t: number): number {
   const a = new Color(c1);
@@ -40,9 +33,9 @@ function getVisibleCells(g: GameLine): [number, number][] {
 }
 
 export function drawGrid(container: Container): void {
-  clearContainer(container);
+  clearContainerToPool(container);
   const { cols, rows } = state.levelData;
-  const g = new Graphics();
+  const g = graphicsPool.take();
 
   g.setStrokeStyle({ width: 1, color: PALETTE.gridLine });
   for (let c = 0; c <= cols; c++) {
@@ -66,7 +59,7 @@ export function drawGrid(container: Container): void {
 }
 
 export function drawGameLines(container: Container): void {
-  clearContainer(container);
+  clearContainerToPool(container);
   const halfCell = state.cellSize / 2;
   const lineWeight = state.cellSize * 0.35;
 
@@ -103,7 +96,7 @@ export function drawGameLines(container: Container): void {
     const headX = isMoving ? offX : 0;
     const headY = isMoving ? offY : 0;
 
-    const g = new Graphics();
+    const g = graphicsPool.take();
 
     // Glow layer
     g.setStrokeStyle({ width: lineWeight + 12, color: mainColor, alpha: glowAlpha, cap: 'round', join: 'round' });
@@ -141,7 +134,7 @@ export function drawGameLines(container: Container): void {
 }
 
 export function drawArrowHeads(container: Container): void {
-  clearContainer(container);
+  clearContainerToPool(container);
   const halfCell = state.cellSize / 2;
   const arrowSize = state.cellSize * 0.38;
 
@@ -163,7 +156,7 @@ export function drawArrowHeads(container: Container): void {
     const h = arrowSize * 0.8;
     const w = arrowSize * 0.5;
 
-    const g = new Graphics();
+    const g = graphicsPool.take();
 
     // Shadow
     g.moveTo(h + 2, 0);
@@ -189,14 +182,14 @@ export function drawArrowHeads(container: Container): void {
 }
 
 export function drawOverlapCells(container: Container): void {
-  clearContainer(container);
+  clearContainerToPool(container);
   if (state.overlaps.length === 0) return;
 
   for (const ov of state.overlaps) {
     const [c, r] = ov.cell;
     const x = state.gridOriginX + c * state.cellSize;
     const y = state.gridOriginY + r * state.cellSize;
-    const g = new Graphics();
+    const g = graphicsPool.take();
 
     g.roundRect(x + 2, y + 2, state.cellSize - 4, state.cellSize - 4, 4);
     g.fill({ color: PALETTE.overlapCell, alpha: PALETTE.overlapAlpha });
@@ -209,7 +202,7 @@ export function drawOverlapCells(container: Container): void {
 }
 
 export function drawHUD(container: Container, appWidth: number, appHeight: number): void {
-  clearContainer(container);
+  clearContainerToPool(container);
   const alive = state.gameLines.filter((l) => l.alive).length;
 
   const solvText = state.solvable === null ? '检查中...' : state.solvable ? '✅ 有解' : '❌ 无解';
@@ -236,11 +229,11 @@ export function drawHUD(container: Container, appWidth: number, appHeight: numbe
 // ── Victory overlay ──
 
 export function drawVictoryOverlay(container: Container, appWidth: number, appHeight: number): void {
-  clearContainer(container);
+  clearContainerToPool(container);
   if (!state.victory) return;
 
   // Semi-transparent backdrop
-  const backdrop = new Graphics();
+  const backdrop = graphicsPool.take();
   const backdropAlpha = Math.min(state.victory.timer / 500, 0.6);
   backdrop.rect(0, 0, appWidth, appHeight);
   backdrop.fill({ color: 0x000000, alpha: backdropAlpha });
@@ -249,7 +242,7 @@ export function drawVictoryOverlay(container: Container, appWidth: number, appHe
   // Particles
   for (const p of state.victory.particles) {
     const alpha = Math.max(0, p.life / p.maxLife);
-    const g = new Graphics();
+    const g = graphicsPool.take();
 
     // Draw different shapes for variety
     const shapeType = Math.floor(p.color) % 3;
@@ -310,7 +303,7 @@ export function drawVictoryOverlay(container: Container, appWidth: number, appHe
     const btnY = appHeight / 2 + 40;
 
     // Button background with rounded corners
-    const btnBg = new Graphics();
+    const btnBg = graphicsPool.take();
     btnBg.roundRect(-btnWidth / 2, -btnHeight / 2, btnWidth, btnHeight, 26);
     btnBg.fill({ color: 0xffd54f, alpha: state.victory.buttonAlpha });
     btnBg.stroke({ width: 2, color: 0xffe082, alpha: state.victory.buttonAlpha });

@@ -1,18 +1,11 @@
-import { Container, Graphics, Text } from 'pixi.js';
+import { Container, Text } from 'pixi.js';
 import { state } from './state';
 import { PALETTE, DEFAULT_COLS, DEFAULT_ROWS } from './constants';
 import { expandCells, checkOverlaps } from './geometry';
 import { initGameLines } from './game-logic';
 import { checkSolvableFromGameLines } from './solver';
 import type { EditorState } from './types';
-
-/** 销毁容器内所有子对象，释放 GPU 资源，防止内存泄漏 */
-function clearContainer(container: Container): void {
-  const children = container.removeChildren();
-  for (const child of children) {
-    child.destroy();
-  }
-}
+import { graphicsPool, clearContainerToPool } from './object-pool';
 
 // ── Editor state ─────────────────────────────────────────────────────
 export const editor: EditorState = {
@@ -329,7 +322,7 @@ export function refreshAfterEdit(): void {
 
 // ── Rendering ────────────────────────────────────────────────────────
 export function drawEditorLayer(container: Container): void {
-  clearContainer(container);
+  clearContainerToPool(container);
   if (editor.mode !== 'edit') return;
 
   const half = state.cellSize / 2;
@@ -348,7 +341,7 @@ export function drawEditorLayer(container: Container): void {
     }
 
     const cursorColor = valid ? PALETTE.editorCursor : PALETTE.editorCursorInvalid;
-    const cursorG = new Graphics();
+    const cursorG = graphicsPool.take();
     // Diamond shape at vertex
     cursorG.moveTo(cx, cy - half * 0.5);
     cursorG.lineTo(cx + half * 0.5, cy);
@@ -363,7 +356,7 @@ export function drawEditorLayer(container: Container): void {
   // ── Current line preview ──
   if (editor.currentLine && editor.currentLine.points.length >= 1) {
     const pts = editor.currentLine.points;
-    const previewG = new Graphics();
+    const previewG = graphicsPool.take();
 
     // Draw line between points
     previewG.setStrokeStyle({ width: state.cellSize * 0.25, color: PALETTE.editorPreview, alpha: 0.6, cap: 'round', join: 'round' });
@@ -395,7 +388,7 @@ export function drawEditorLayer(container: Container): void {
       const h = arrowSize * 0.8;
       const w = arrowSize * 0.5;
 
-      const arrowG = new Graphics();
+      const arrowG = graphicsPool.take();
       arrowG.moveTo(h, 0);
       arrowG.lineTo(-h * 0.3, -w);
       arrowG.lineTo(-h * 0.3, w);
@@ -417,7 +410,7 @@ export function drawEditorLayer(container: Container): void {
       const hx = state.gridOriginX + editor.hoverCol * state.cellSize + half;
       const hy = state.gridOriginY + editor.hoverRow * state.cellSize + half;
 
-      const extG = new Graphics();
+      const extG = graphicsPool.take();
       extG.setStrokeStyle({ width: state.cellSize * 0.2, color: PALETTE.editorPreview, alpha: 0.35, cap: 'round' });
       extG.moveTo(lx, ly).lineTo(hx, hy).stroke();
       // Hover dot
@@ -432,7 +425,7 @@ export function drawEditorLayer(container: Container): void {
     const ld = state.levelData.lines.find((l) => l.id === editor.selectedId);
     if (ld) {
       const cells = expandCells(ld.points);
-      const selG = new Graphics();
+      const selG = graphicsPool.take();
       for (const [c, r] of cells) {
         if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
         const x = state.gridOriginX + c * state.cellSize;
@@ -447,12 +440,12 @@ export function drawEditorLayer(container: Container): void {
 }
 
 export function drawEditorHUD(container: Container, appWidth: number, appHeight: number): void {
-  clearContainer(container);
+  clearContainerToPool(container);
   if (editor.mode !== 'edit') return;
 
   // ── Top bar ─────────────────────────────────────────────────────────
   const barH = 38;
-  const barG = new Graphics();
+  const barG = graphicsPool.take();
   barG.rect(0, 0, appWidth, barH);
   barG.fill({ color: PALETTE.editorHudBg, alpha: 0.95 });
   barG.setStrokeStyle({ width: 1, color: PALETTE.editorHudAccent, alpha: 0.4 });
@@ -477,7 +470,7 @@ export function drawEditorHUD(container: Container, appWidth: number, appHeight:
 
   // ── Bottom info bar ─────────────────────────────────────────────────
   const bottomY = appHeight - 34;
-  const bottomG = new Graphics();
+  const bottomG = graphicsPool.take();
   bottomG.rect(0, bottomY, appWidth, 34);
   bottomG.fill({ color: PALETTE.editorHudBg, alpha: 0.95 });
   bottomG.setStrokeStyle({ width: 1, color: PALETTE.editorHudAccent, alpha: 0.4 });
