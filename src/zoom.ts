@@ -11,7 +11,7 @@
 
 import { Container, Text } from 'pixi.js';
 import { state } from './state';
-import { ZOOM_MIN, ZOOM_MAX, ZOOM_SLIDER_HEIGHT, ZOOM_SLIDER_WIDTH, ZOOM_BUTTON_SIZE } from './constants';
+import { ZOOM_MIN, ZOOM_MAX } from './constants';
 import { graphicsPool, clearContainerToPool } from './object-pool';
 
 // ── 缩放控制 ──────────────────────────────────────────────────
@@ -234,50 +234,44 @@ export function initZoomInput(canvas: HTMLCanvasElement): void {
 
 // ── 缩放滑块 UI 渲染 ─────────────────────────────────────────
 
+const SLIDER_TRACK_W = 160;
+const SLIDER_BTN_R = 14;
+const SLIDER_BAR_H = 4;
+const SLIDER_GAP = 8;
+
 /**
- * 在屏幕右侧绘制缩放控制条（+ 滑块 -）
- * 返回滑块区域的 hit-test 信息
+ * 在屏幕底部居中绘制水平缩放控制条（- 滑块 + 百分比）
  */
 export function drawZoomSlider(container: Container, appWidth: number, appHeight: number): void {
   clearContainerToPool(container);
 
-  const margin = 16;
-  const sliderH = ZOOM_SLIDER_HEIGHT;
-  const btnSize = ZOOM_BUTTON_SIZE;
-  const totalH = btnSize + sliderH + btnSize + 12; // 12 = gaps
-  const centerX = appWidth - margin - btnSize / 2;
-  const startY = (appHeight - totalH) / 2;
+  const totalW = SLIDER_BTN_R * 2 + SLIDER_GAP + SLIDER_TRACK_W + SLIDER_GAP + SLIDER_BTN_R * 2 + 40;
+  const baseX = (appWidth - totalW) / 2;
+  const cy = appHeight - 28;
 
   // ── 背景面板 ──
-  const panelW = btnSize + 16;
-  const panelH = totalH + 16;
-  const panelX = appWidth - margin - panelW / 2 - btnSize / 2 + 4;
-  const panelY = startY - 8;
   const panel = graphicsPool.take();
-  panel.roundRect(panelX, panelY, panelW, panelH, 12);
-  panel.fill({ color: 0x111827, alpha: 0.75 });
+  panel.roundRect(baseX - 10, cy - 18, totalW + 20, 32, 10);
+  panel.fill({ color: 0x111827, alpha: 0.7 });
   container.addChild(panel);
 
-  // ── + 按钮 ──
-  const plusBtnY = startY;
-  const plusBtn = graphicsPool.take();
-  plusBtn.circle(centerX, plusBtnY + btnSize / 2, btnSize / 2);
-  plusBtn.fill({ color: 0x1e293b });
-  plusBtn.stroke({ width: 1.5, color: 0x334155 });
-  // 画 + 号
-  plusBtn.setStrokeStyle({ width: 2.5, color: 0x94a3b8 });
-  plusBtn.moveTo(centerX - 8, plusBtnY + btnSize / 2).lineTo(centerX + 8, plusBtnY + btnSize / 2);
-  plusBtn.moveTo(centerX, plusBtnY + btnSize / 2 - 8).lineTo(centerX, plusBtnY + btnSize / 2 + 8);
-  plusBtn.stroke();
-  container.addChild(plusBtn);
+  let cx = baseX + SLIDER_BTN_R;
+
+  // ── - 按钮 ──
+  const minusBtn = graphicsPool.take();
+  minusBtn.circle(cx, cy, SLIDER_BTN_R);
+  minusBtn.fill({ color: 0x1e293b });
+  minusBtn.stroke({ width: 1, color: 0x334155 });
+  minusBtn.setStrokeStyle({ width: 2, color: 0x94a3b8 });
+  minusBtn.moveTo(cx - 6, cy).lineTo(cx + 6, cy).stroke();
+  container.addChild(minusBtn);
+  cx += SLIDER_BTN_R + SLIDER_GAP;
 
   // ── 滑块轨道 ──
-  const trackTop = plusBtnY + btnSize + 4;
-  const trackBottom = trackTop + sliderH;
-  const trackX = centerX;
-
+  const trackLeft = cx;
+  const trackRight = cx + SLIDER_TRACK_W;
   const track = graphicsPool.take();
-  track.roundRect(trackX - ZOOM_SLIDER_WIDTH / 2, trackTop, ZOOM_SLIDER_WIDTH, sliderH, 3);
+  track.roundRect(trackLeft, cy - SLIDER_BAR_H / 2, SLIDER_TRACK_W, SLIDER_BAR_H, 2);
   track.fill({ color: 0x1e293b });
   track.stroke({ width: 1, color: 0x334155 });
   container.addChild(track);
@@ -285,74 +279,71 @@ export function drawZoomSlider(container: Container, appWidth: number, appHeight
   // ── 滑块把手 ──
   const zoomRange = ZOOM_MAX - ZOOM_MIN;
   const zoomNorm = (state.zoom.scale - ZOOM_MIN) / zoomRange;
-  const thumbY = trackBottom - zoomNorm * sliderH; // 底部 = 最大缩放
-  const thumbR = 10;
+  const thumbX = trackLeft + zoomNorm * SLIDER_TRACK_W;
+  const thumbR = 9;
 
   const thumb = graphicsPool.take();
-  thumb.circle(trackX, thumbY, thumbR);
+  thumb.circle(thumbX, cy, thumbR);
   thumb.fill({ color: 0x3b82f6 });
   thumb.stroke({ width: 2, color: 0x60a5fa });
   container.addChild(thumb);
+  cx = trackRight + SLIDER_GAP;
 
-  // ── - 按钮 ──
-  const minusBtnY = trackBottom + 4;
-  const minusBtn = graphicsPool.take();
-  minusBtn.circle(centerX, minusBtnY + btnSize / 2, btnSize / 2);
-  minusBtn.fill({ color: 0x1e293b });
-  minusBtn.stroke({ width: 1.5, color: 0x334155 });
-  // 画 - 号
-  minusBtn.setStrokeStyle({ width: 2.5, color: 0x94a3b8 });
-  minusBtn.moveTo(centerX - 8, minusBtnY + btnSize / 2).lineTo(centerX + 8, minusBtnY + btnSize / 2);
-  minusBtn.stroke();
-  container.addChild(minusBtn);
+  // ── + 按钮 ──
+  cx += SLIDER_BTN_R;
+  const plusBtn = graphicsPool.take();
+  plusBtn.circle(cx, cy, SLIDER_BTN_R);
+  plusBtn.fill({ color: 0x1e293b });
+  plusBtn.stroke({ width: 1, color: 0x334155 });
+  plusBtn.setStrokeStyle({ width: 2, color: 0x94a3b8 });
+  plusBtn.moveTo(cx - 6, cy).lineTo(cx + 6, cy);
+  plusBtn.moveTo(cx, cy - 6).lineTo(cx, cy + 6);
+  plusBtn.stroke();
+  container.addChild(plusBtn);
 
-  // ── 缩放百分比文字 ──
+  // ── 百分比 ──
   const pctText = new Text({
     text: `${Math.round(state.zoom.scale * 100)}%`,
     style: { fontSize: 11, fill: 0x64748b, fontFamily: 'sans-serif' },
   });
-  pctText.anchor.set(0.5, 0);
-  pctText.x = centerX;
-  pctText.y = minusBtnY + btnSize + 4;
+  pctText.anchor.set(0, 0.5);
+  pctText.x = cx + SLIDER_BTN_R + 6;
+  pctText.y = cy;
   container.addChild(pctText);
 }
 
-/** 判断点击是否在缩放按钮/滑块区域内，返回操作类型 */
+/** 判断点击是否在缩放按钮/滑块区域内 */
 export function hitTestZoomSlider(
   x: number, y: number, appWidth: number, appHeight: number,
 ): 'plus' | 'minus' | 'track' | null {
-  const margin = 16;
-  const btnSize = ZOOM_BUTTON_SIZE;
-  const sliderH = ZOOM_SLIDER_HEIGHT;
-  const totalH = btnSize + sliderH + btnSize + 12;
-  const centerX = appWidth - margin - btnSize / 2;
-  const startY = (appHeight - totalH) / 2;
+  const totalW = SLIDER_BTN_R * 2 + SLIDER_GAP + SLIDER_TRACK_W + SLIDER_GAP + SLIDER_BTN_R * 2 + 40;
+  const baseX = (appWidth - totalW) / 2;
+  const cy = appHeight - 28;
 
-  // + 按钮
-  const plusBtnY = startY;
-  if (Math.hypot(x - centerX, y - plusBtnY - btnSize / 2) <= btnSize / 2 + 4) return 'plus';
+  let cx = baseX + SLIDER_BTN_R;
 
   // - 按钮
-  const trackBottom = plusBtnY + btnSize + 4 + sliderH;
-  const minusBtnY = trackBottom + 4;
-  if (Math.hypot(x - centerX, y - minusBtnY - btnSize / 2) <= btnSize / 2 + 4) return 'minus';
+  if (Math.hypot(x - cx, y - cy) <= SLIDER_BTN_R + 4) return 'minus';
+  cx += SLIDER_BTN_R + SLIDER_GAP;
 
   // 滑块轨道
-  const trackTop = plusBtnY + btnSize + 4;
-  if (Math.abs(x - centerX) <= 20 && y >= trackTop && y <= trackBottom) return 'track';
+  const trackLeft = cx;
+  const trackRight = cx + SLIDER_TRACK_W;
+  if (x >= trackLeft - 10 && x <= trackRight + 10 && Math.abs(y - cy) <= 20) return 'track';
+  cx = trackRight + SLIDER_GAP + SLIDER_BTN_R;
+
+  // + 按钮
+  if (Math.hypot(x - cx, y - cy) <= SLIDER_BTN_R + 4) return 'plus';
 
   return null;
 }
 
 /** 处理滑块区域的拖拽（更新缩放值） */
-export function handleSliderDrag(y: number, appHeight: number): void {
-  const btnSize = ZOOM_BUTTON_SIZE;
-  const sliderH = ZOOM_SLIDER_HEIGHT;
-  const totalH = btnSize + sliderH + btnSize + 12;
-  const startY = (appHeight - totalH) / 2;
-  const trackTop = startY + btnSize + 4;
-  const trackBottom = trackTop + sliderH;
+export function handleSliderDrag(x: number, appWidth: number): void {
+  const totalW = SLIDER_BTN_R * 2 + SLIDER_GAP + SLIDER_TRACK_W + SLIDER_GAP + SLIDER_BTN_R * 2 + 40;
+  const baseX = (appWidth - totalW) / 2;
+  const trackLeft = baseX + SLIDER_BTN_R + SLIDER_GAP;
 
-  const norm = Math.max(0, Math.min(1, (trackBottom - y) / sliderH));
+  const norm = Math.max(0, Math.min(1, (x - trackLeft) / SLIDER_TRACK_W));
   state.zoom.scale = ZOOM_MIN + norm * (ZOOM_MAX - ZOOM_MIN);
 }

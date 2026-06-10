@@ -57,7 +57,7 @@ export function handleClick(e: FederatedPointerEvent, app: Application): void {
   }
   if (zoomHit === 'track') {
     sliderDragging = true;
-    handleSliderDrag(screenY, app.screen.height);
+    handleSliderDrag(screenX, app.screen.width);
     return;
   }
 
@@ -97,7 +97,7 @@ export function handleClick(e: FederatedPointerEvent, app: Application): void {
 export function handlePointerMove(e: FederatedPointerEvent): void {
   // 滑块拖拽
   if (sliderDragging) {
-    handleSliderDrag(e.global.y, window.innerHeight);
+    handleSliderDrag(e.global.x, window.innerWidth);
     return;
   }
   updatePointer(e.global.x, e.global.y);
