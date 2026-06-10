@@ -4,6 +4,7 @@ import { checkSolvableFromGameLines } from './solver';
 import { calculateLayout } from './geometry';
 import { generateLevel } from './level-generator';
 import { editor, handleEditorClick, handleEditorKey, updatePointer, refreshAfterEdit } from './editor';
+import { screenToGrid, hitTestZoomSlider, zoomIn, zoomOut, handleSliderDrag, fitToScreen } from './zoom';
 import type { Application, FederatedPointerEvent } from 'pixi.js';
 
 function resetGame(app: Application): void {
@@ -17,6 +18,11 @@ function resetGame(app: Application): void {
   initGameLines();
   state.overlaps = [];
   state.solvable = checkSolvableFromGameLines(state.gameLines, state.levelData.cols, state.levelData.rows);
+
+  // 大网格重新适配
+  if (state.levelData.cols > 12 || state.levelData.rows > 12) {
+    fitToScreen(app.screen.width, app.screen.height);
+  }
 }
 
 function isInsideButton(x: number, y: number, appWidth: number, appHeight: number): boolean {
@@ -32,8 +38,31 @@ function isInsideButton(x: number, y: number, appWidth: number, appHeight: numbe
   );
 }
 
+// 滑块拖拽状态
+let sliderDragging = false;
+
 export function handleClick(e: FederatedPointerEvent, app: Application): void {
+  const screenX = e.global.x;
+  const screenY = e.global.y;
+
+  // ── 缩放滑块 hit-test（优先） ──
+  const zoomHit = hitTestZoomSlider(screenX, screenY, app.screen.width, app.screen.height);
+  if (zoomHit === 'plus') {
+    zoomIn();
+    return;
+  }
+  if (zoomHit === 'minus') {
+    zoomOut();
+    return;
+  }
+  if (zoomHit === 'track') {
+    sliderDragging = true;
+    handleSliderDrag(screenY, app.screen.height);
+    return;
+  }
+
   if (editor.mode === 'edit') {
+    // 编辑模式也需要缩放坐标转换
     const handled = handleEditorClick(e);
     if (handled) refreshAfterEdit();
     return;
@@ -41,7 +70,7 @@ export function handleClick(e: FederatedPointerEvent, app: Application): void {
 
   // Victory screen — check "Play Again" button
   if (state.victory && state.victory.buttonAlpha >= 0.9) {
-    if (isInsideButton(e.global.x, e.global.y, app.screen.width, app.screen.height)) {
+    if (isInsideButton(screenX, screenY, app.screen.width, app.screen.height)) {
       resetGame(app);
     }
     return; // Block all other clicks during victory
@@ -50,8 +79,8 @@ export function handleClick(e: FederatedPointerEvent, app: Application): void {
   // Play mode
   if (state.animState) return;
 
-  const col = Math.floor((e.global.x - state.gridOriginX) / state.cellSize);
-  const row = Math.floor((e.global.y - state.gridOriginY) / state.cellSize);
+  // 使用缩放感知的坐标转换
+  const { col, row } = screenToGrid(screenX, screenY);
 
   for (let i = state.gameLines.length - 1; i >= 0; i--) {
     const g = state.gameLines[i];
@@ -66,6 +95,11 @@ export function handleClick(e: FederatedPointerEvent, app: Application): void {
 }
 
 export function handlePointerMove(e: FederatedPointerEvent): void {
+  // 滑块拖拽
+  if (sliderDragging) {
+    handleSliderDrag(e.global.y, window.innerHeight);
+    return;
+  }
   updatePointer(e.global.x, e.global.y);
 }
 
@@ -83,5 +117,13 @@ export function handleKeyDown(e: KeyboardEvent, app: Application): void {
     if (e.key === 'r' || e.key === 'R') {
       resetGame(app);
     }
+    if (e.key === 'f' || e.key === 'F') {
+      fitToScreen(app.screen.width, app.screen.height);
+    }
   }
 }
+
+// 全局 mouseup 监听（结束滑块拖拽）
+window.addEventListener('mouseup', () => {
+  sliderDragging = false;
+});

@@ -1,5 +1,5 @@
 import type { GameLine, Overlap, AnimState, LevelData } from './types';
-import { DEFAULT_COLS, DEFAULT_ROWS } from './constants';
+import { DEFAULT_COLS, DEFAULT_ROWS, ZOOM_DEFAULT } from './constants';
 
 export interface VictoryParticle {
   x: number;
@@ -21,6 +21,23 @@ export interface VictoryState {
   buttonAlpha: number;    // fade-in for button
 }
 
+export interface ZoomState {
+  scale: number;
+  panX: number;
+  panY: number;
+  // Pinch gesture tracking
+  pinching: boolean;
+  pinchDist: number;
+  pinchCenterX: number;
+  pinchCenterY: number;
+  // Pan gesture tracking
+  panning: boolean;
+  panStartX: number;
+  panStartY: number;
+  panStartOffsetX: number;
+  panStartOffsetY: number;
+}
+
 export interface GameState {
   levelData: LevelData;
   cellSize: number;
@@ -31,6 +48,7 @@ export interface GameState {
   solvable: boolean | null;
   animState: AnimState | null;
   victory: VictoryState | null;
+  zoom: ZoomState;
 }
 
 export const state: GameState = {
@@ -43,4 +61,18 @@ export const state: GameState = {
   solvable: null,
   animState: null,
   victory: null,
+  zoom: {
+    scale: ZOOM_DEFAULT,
+    panX: 0,
+    panY: 0,
+    pinching: false,
+    pinchDist: 0,
+    pinchCenterX: 0,
+    pinchCenterY: 0,
+    panning: false,
+    panStartX: 0,
+    panStartY: 0,
+    panStartOffsetX: 0,
+    panStartOffsetY: 0,
+  },
 };

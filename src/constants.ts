@@ -24,8 +24,16 @@ export const PALETTE = {
 
 export const STEP_INTERVAL = 80;
 export const FLASH_DURATION = 500;
-export const DEFAULT_COLS = 7;
-export const DEFAULT_ROWS = 8;
+export const DEFAULT_COLS = 20;
+export const DEFAULT_ROWS = 20;
+
+// Zoom
+export const ZOOM_MIN = 0.3;
+export const ZOOM_MAX = 3;
+export const ZOOM_DEFAULT = 1;
+export const ZOOM_SLIDER_HEIGHT = 160;
+export const ZOOM_SLIDER_WIDTH = 6;
+export const ZOOM_BUTTON_SIZE = 36;
 
 // Victory
 export const VICTORY_COLORS = [0xffd54f, 0x4fc3f7, 0x81c784, 0xf06292, 0xba68c8, 0xff7043, 0x4dd0e1, 0xfff176, 0xef5350, 0x64ffda];

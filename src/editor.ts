@@ -4,6 +4,7 @@ import { PALETTE, DEFAULT_COLS, DEFAULT_ROWS } from './constants';
 import { expandCells, checkOverlaps } from './geometry';
 import { initGameLines } from './game-logic';
 import { checkSolvableFromGameLines } from './solver';
+import { screenToGrid } from './zoom';
 import type { EditorState } from './types';
 import { graphicsPool, clearContainerToPool } from './object-pool';
 
@@ -155,8 +156,7 @@ export function startExtendLine(lineId: number, col: number, row: number): void 
 
 // ── Pointer update ───────────────────────────────────────────────────
 export function updatePointer(x: number, y: number): void {
-  const col = Math.floor((x - state.gridOriginX) / state.cellSize);
-  const row = Math.floor((y - state.gridOriginY) / state.cellSize);
+  const { col, row } = screenToGrid(x, y);
   const { cols, rows } = state.levelData;
   editor.hoverCol = col >= 0 && col < cols ? col : -1;
   editor.hoverRow = row >= 0 && row < rows ? row : -1;
@@ -166,8 +166,7 @@ export function updatePointer(x: number, y: number): void {
 export function handleEditorClick(
   e: { global: { x: number; y: number }; button: number },
 ): boolean {
-  const col = Math.floor((e.global.x - state.gridOriginX) / state.cellSize);
-  const row = Math.floor((e.global.y - state.gridOriginY) / state.cellSize);
+  const { col, row } = screenToGrid(e.global.x, e.global.y);
   const { cols, rows } = state.levelData;
   const onGrid = col >= 0 && col < cols && row >= 0 && row < rows;
 
@@ -271,7 +270,7 @@ export function handleEditorKey(e: KeyboardEvent): boolean {
   // Grid size adjustments with arrow keys (Shift + arrow to resize)
   if (e.shiftKey) {
     if (key === 'ArrowRight') {
-      state.levelData.cols = Math.min(20, state.levelData.cols + 1);
+      state.levelData.cols = Math.min(40, state.levelData.cols + 1);
       editor.editorCols = state.levelData.cols;
       return true;
     }
@@ -286,7 +285,7 @@ export function handleEditorKey(e: KeyboardEvent): boolean {
       return true;
     }
     if (key === 'ArrowDown') {
-      state.levelData.rows = Math.min(20, state.levelData.rows + 1);
+      state.levelData.rows = Math.min(40, state.levelData.rows + 1);
       editor.editorRows = state.levelData.rows;
       return true;
     }

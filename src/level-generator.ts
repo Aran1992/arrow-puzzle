@@ -9,7 +9,7 @@ import type { LevelData } from './game-engine';
  * 使用 game-engine.ts 的 verifyLevelSolvable 算法（微秒级）。
  * 保证永远返回非空数组。
  */
-export function generateLevel(cols: number, rows: number): LineData[] {
+export function generateLevel(cols: number, rows: number, overrideNumLines?: number): LineData[] {
   const dirs: [number, number][] = [
     [1, 0],
     [-1, 0],
@@ -17,9 +17,12 @@ export function generateLevel(cols: number, rows: number): LineData[] {
     [0, -1],
   ];
 
-  // 线段密度随网格大小自适应：小网格用 0.22，大网格适当降低避免死锁
-  const density = cols * rows <= 64 ? 0.22 : Math.max(0.12, 0.22 - (cols * rows - 64) * 0.0008);
-  const numLines = Math.max(3, Math.floor(cols * rows * density));
+  // 线段密度随网格大小自适应：小网格用 0.22，大网格按面积平方根递减
+  // 20x20 → ~27条，10x10 → ~17条，7x8 → ~12条
+  const density = cols * rows <= 64
+    ? 0.22
+    : 0.22 * Math.sqrt(64 / (cols * rows));
+  const numLines = overrideNumLines ?? Math.max(5, Math.floor(cols * rows * density));
 
   function walk(
     c: number,
@@ -62,7 +65,7 @@ export function generateLevel(cols: number, rows: number): LineData[] {
     const generated: LineData[] = [];
     let lineId = 1;
 
-    for (let attempt = 0; attempt < 800 && generated.length < numLines; attempt++) {
+    for (let attempt = 0; attempt < 1200 && generated.length < numLines; attempt++) {
       const numSegs = Math.random() < 0.4 ? 2 : 3;
       const startC = Math.floor(Math.random() * cols);
       const startR = Math.floor(Math.random() * rows);
@@ -105,6 +108,12 @@ export function generateLevel(cols: number, rows: number): LineData[] {
     // 每 50 次打印一次进度
     if (genAttempt % 50 === 0) {
       console.log(`⏳ 已尝试 ${genAttempt} 次，继续寻找可解关卡...`);
+    }
+    // 安全阀：超过 200 次降低线段数重试
+    if (genAttempt > 200 && numLines > 5) {
+      const reduced = numLines - 3;
+      console.log(`⚠️ 生成困难，降低线段数 ${numLines} → ${reduced} 重试`);
+      return generateLevel(cols, rows, reduced);
     }
   }
 }

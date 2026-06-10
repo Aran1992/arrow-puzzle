@@ -50,12 +50,14 @@ export function calculateLayout(
   canvasWidth: number,
   canvasHeight: number,
 ): { cellSize: number; gridOriginX: number; gridOriginY: number } {
-  const padding = 60;
+  // 大网格用更小的 padding，让格子尽量大
+  const area = cols * rows;
+  const padding = area > 200 ? 20 : area > 64 ? 40 : 60;
   let cellSize = Math.min(
     Math.floor((canvasWidth - padding * 2) / (cols + 0.5)),
     Math.floor((canvasHeight - padding * 2) / (rows + 0.5)),
   );
-  cellSize = Math.max(cellSize, 30);
+  cellSize = Math.max(cellSize, 12); // 最小 12px（大网格会很小，靠缩放解决）
   const gridOriginX = (canvasWidth - cols * cellSize) / 2;
   const gridOriginY = (canvasHeight - rows * cellSize) / 2;
   return { cellSize, gridOriginX, gridOriginY };

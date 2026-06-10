@@ -8,6 +8,7 @@ import { initGameLines, updateAnim, updateVictory } from './game-logic';
 import { drawGrid, drawGameLines, drawArrowHeads, drawOverlapCells, drawHUD, drawVictoryOverlay } from './renderer';
 import { editor, drawEditorLayer, drawEditorHUD } from './editor';
 import { handleClick, handleKeyDown, handlePointerMove } from './input';
+import { initZoomInput, applyZoomToContainer, drawZoomSlider, fitToScreen } from './zoom';
 import './style.css';
 
 async function main(): Promise<void> {
@@ -21,14 +22,21 @@ async function main(): Promise<void> {
   });
   document.body.appendChild(app.canvas);
 
+  // 游戏容器（受缩放/平移影响）
+  const gameContainer = new Container();
   const gridLayer = new Container();
   const overlapLayer = new Container();
   const linesLayer = new Container();
   const editorLayer = new Container();
   const arrowLayer = new Container();
+  gameContainer.addChild(gridLayer, overlapLayer, linesLayer, editorLayer, arrowLayer);
+
+  // 固定 UI（不受缩放影响）
   const hudLayer = new Container();
   const victoryLayer = new Container();
-  app.stage.addChild(gridLayer, overlapLayer, linesLayer, editorLayer, arrowLayer, hudLayer, victoryLayer);
+  const zoomLayer = new Container();
+
+  app.stage.addChild(gameContainer, hudLayer, victoryLayer, zoomLayer);
 
   app.stage.eventMode = 'static';
   app.stage.hitArea = app.screen;
@@ -48,23 +56,41 @@ async function main(): Promise<void> {
   initGameLines();
   state.solvable = checkSolvableFromGameLines(state.gameLines, state.levelData.cols, state.levelData.rows);
 
+  // 大网格自动适配缩放
+  if (state.levelData.cols > 12 || state.levelData.rows > 12) {
+    fitToScreen(app.screen.width, app.screen.height);
+  }
+
+  // 初始化缩放输入（滚轮 + 触摸手势）
+  initZoomInput(app.canvas as HTMLCanvasElement);
+
   // Game loop
   app.ticker.add((ticker) => {
     if (editor.mode === 'play') {
       updateAnim(ticker.deltaMS);
       updateVictory(ticker.deltaMS);
     }
+
+    // 应用缩放变换到游戏容器
+    applyZoomToContainer(gameContainer);
+
+    // 游戏层（在 gameContainer 内，受缩放影响）
     drawGrid(gridLayer);
     drawOverlapCells(overlapLayer);
     drawGameLines(linesLayer);
     drawEditorLayer(editorLayer);
     drawArrowHeads(arrowLayer);
+
+    // 固定 UI（在 stage 上，不受缩放影响）
     if (editor.mode === 'edit') {
       drawEditorHUD(hudLayer, app.screen.width, app.screen.height);
     } else {
       drawHUD(hudLayer, app.screen.width, app.screen.height);
     }
     drawVictoryOverlay(victoryLayer, app.screen.width, app.screen.height);
+
+    // 缩放滑块（固定位置）
+    drawZoomSlider(zoomLayer, app.screen.width, app.screen.height);
   });
 
   // Input
