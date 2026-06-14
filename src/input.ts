@@ -3,8 +3,9 @@ import { startMove, initGameLines } from './game-logic';
 import { checkSolvableFromGameLines } from './solver';
 import { calculateLayout } from './geometry';
 import { generateLevel } from './level-generator';
-import { editor, handleEditorClick, handleEditorKey, updatePointer, refreshAfterEdit } from './editor';
+import { editor, handleEditorClick, handleEditorKey, updatePointer, refreshAfterEdit, toggleEditorMode } from './editor';
 import { screenToGrid, hitTestZoomSlider, zoomIn, zoomOut, handleSliderDrag, fitToScreen } from './zoom';
+import { EDIT_BTN } from './renderer';
 import type { Application, FederatedPointerEvent } from 'pixi.js';
 
 function resetGame(app: Application): void {
@@ -58,6 +59,17 @@ export function handleClick(e: FederatedPointerEvent, app: Application): void {
   if (zoomHit === 'track') {
     sliderDragging = true;
     handleSliderDrag(screenX, app.screen.width);
+    return;
+  }
+
+  // ── 编辑按钮 hit-test（两种模式共用） ──
+  if (
+    screenX >= EDIT_BTN.x &&
+    screenX <= EDIT_BTN.x + EDIT_BTN.w &&
+    screenY >= EDIT_BTN.y &&
+    screenY <= EDIT_BTN.y + EDIT_BTN.h
+  ) {
+    toggleEditorMode();
     return;
   }
 

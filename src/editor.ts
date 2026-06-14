@@ -7,6 +7,7 @@ import { checkSolvableFromGameLines } from './solver';
 import { screenToGrid } from './zoom';
 import type { EditorState } from './types';
 import { graphicsPool, clearContainerToPool } from './object-pool';
+import { EDIT_BTN } from './renderer';
 
 // ── Editor state ─────────────────────────────────────────────────────
 export const editor: EditorState = {
@@ -458,6 +459,27 @@ export function drawEditorHUD(container: Container, appWidth: number, appHeight:
   modeText.x = 16;
   modeText.y = 10;
   container.addChild(modeText);
+
+  // ── 退出编辑按钮（右上角）──
+  EDIT_BTN.x = appWidth - EDIT_BTN.w - 12;
+  EDIT_BTN.y = 4;
+
+  const exitBtnG = graphicsPool.take();
+  exitBtnG.roundRect(EDIT_BTN.x, EDIT_BTN.y, EDIT_BTN.w, EDIT_BTN.h, 8);
+  exitBtnG.fill({ color: 0xc75050, alpha: 0.85 });
+  exitBtnG.setStrokeStyle({ width: 1, color: 0xe07070, alpha: 0.6 });
+  exitBtnG.roundRect(EDIT_BTN.x, EDIT_BTN.y, EDIT_BTN.w, EDIT_BTN.h, 8);
+  exitBtnG.stroke();
+  container.addChild(exitBtnG);
+
+  const exitBtnText = new Text({
+    text: '✕ 退出',
+    style: { fontSize: 13, fill: 0xffffff, fontFamily: 'sans-serif', fontWeight: 'bold' },
+  });
+  exitBtnText.anchor.set(0.5);
+  exitBtnText.x = EDIT_BTN.x + EDIT_BTN.w / 2;
+  exitBtnText.y = EDIT_BTN.y + EDIT_BTN.h / 2;
+  container.addChild(exitBtnText);
 
   const helpText = new Text({
     text: '左键: 添加点  |  右键: 删除  |  Enter: 完成  |  Esc: 取消  |  Del: 删除选中  |  Shift+方向键: 调整网格  |  E: 退出编辑',

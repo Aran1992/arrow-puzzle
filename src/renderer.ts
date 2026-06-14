@@ -201,18 +201,52 @@ export function drawOverlapCells(container: Container): void {
   }
 }
 
+// 编辑按钮区域（供 input.ts 点击检测用）
+export const EDIT_BTN = { x: 0, y: 0, w: 70, h: 32 };
+
 export function drawHUD(container: Container, appWidth: number, appHeight: number): void {
   clearContainerToPool(container);
   const alive = state.gameLines.filter((l) => l.alive).length;
 
   const solvText = state.solvable === null ? '检查中...' : state.solvable ? '✅ 有解' : '❌ 无解';
   const info = new Text({
-    text: `线段: ${alive}/${state.gameLines.length}  |  ${solvText}  |  点击线段移动  |  R 重新生成`,
+    text: `线段: ${alive}/${state.gameLines.length}  |  ${solvText}  |  点击线段移动`,
     style: { fontSize: 14, fill: PALETTE.hudText, fontFamily: 'sans-serif' },
   });
   info.x = 16;
   info.y = 16;
   container.addChild(info);
+
+  // ── 编辑按钮（右上角）──
+  EDIT_BTN.x = appWidth - EDIT_BTN.w - 12;
+  EDIT_BTN.y = 8;
+
+  const btnG = graphicsPool.take();
+  btnG.roundRect(EDIT_BTN.x, EDIT_BTN.y, EDIT_BTN.w, EDIT_BTN.h, 8);
+  btnG.fill({ color: 0x4a6fa5, alpha: 0.85 });
+  btnG.setStrokeStyle({ width: 1, color: 0x6b8fc2, alpha: 0.6 });
+  btnG.roundRect(EDIT_BTN.x, EDIT_BTN.y, EDIT_BTN.w, EDIT_BTN.h, 8);
+  btnG.stroke();
+  container.addChild(btnG);
+
+  const btnText = new Text({
+    text: '✏️ 编辑',
+    style: { fontSize: 13, fill: 0xffffff, fontFamily: 'sans-serif', fontWeight: 'bold' },
+  });
+  btnText.anchor.set(0.5);
+  btnText.x = EDIT_BTN.x + EDIT_BTN.w / 2;
+  btnText.y = EDIT_BTN.y + EDIT_BTN.h / 2;
+  container.addChild(btnText);
+
+  // 底部提示
+  const hint = new Text({
+    text: 'R 重新生成  |  F 适配屏幕',
+    style: { fontSize: 12, fill: PALETTE.hudText, fontFamily: 'sans-serif' },
+  });
+  hint.alpha = 0.6;
+  hint.x = 16;
+  hint.y = appHeight - 28;
+  container.addChild(hint);
 
   if (state.solvable === false) {
     const warn = new Text({
